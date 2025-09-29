@@ -64,8 +64,14 @@ class SVM_QP:
             A = matrix(y.reshape(1, -1), tc='d')
             b = matrix(0.0, tc='d')
 
-            #make solver less annoying
+            #show every line 
             solvers.options['show_progress'] = True
+
+            #fix runs taking ages add tolerences
+            solvers.options['maxiters'] = 50      #hard cap on iterations
+            solvers.options['abstol'] = 1e-7      
+            solvers.options['reltol'] = 1e-6
+            solvers.options['feastol'] = 1e-7
 
             #solve QP
             sol = solvers.qp(P, q, G, h, A, b)
