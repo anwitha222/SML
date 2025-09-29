@@ -52,21 +52,51 @@ def grid_search_linear_C(X_train, y_train, X_val, y_val, C_values):
     print(f"\n[BEST] C={best_C} with val_acc={best['val_acc']:.4f}")
     return best_C, results
 
+def grid_search_rbf(X_train, y_train, X_val, y_val, C_values, gamma_values):
+    
+    #tune RBF kernel SVM over C and gamma using the validation set.
+    #returns (best_params, results_list) where best_params = {"C": ..., "gamma": ...}
+    
+    from src.svm_qp import SVM_QP
+    results = []
+    for C in C_values:
+        for gamma in gamma_values:
+            print(f"[TUNE] RBF SVM with C={C}, gamma={gamma} ...")
+            clf = SVM_QP(C=C, kernel=("rbf", {"gamma": gamma}))
+            clf.fit(X_train, y_train)
+            val_acc = (clf.predict(X_val) == y_val).mean()
+            results.append({"kernel": "rbf", "C": C, "gamma": gamma, "val_acc": float(val_acc)})
+
+    #sort by validation accuracy (desc)
+    results.sort(key=lambda r: r["val_acc"], reverse=True)
+    best = results[0]
+    print("\nValidation results (RBF kernel):")
+    for r in results:
+        print(f"  C={r['C']:>6}, gamma={r['gamma']:<8} | val_acc={r['val_acc']:.4f}")
+    print(f"\n[BEST-RBF] C={best['C']}, gamma={best['gamma']} with val_acc={best['val_acc']:.4f}")
+    return {"C": best["C"], "gamma": best["gamma"]}, results
+
+
 if __name__ == "__main__":
-    #load standardized splits
+    # Load standardized splits per assignment spec
     X_train, y_train, X_val, y_val, X_test, y_test = load_and_split()
 
-    #grid search: linear kernel over a small C grid 
-    C_grid = [0.01, 0.1, 1.0, 10.0, 100.0]
-    best_C, results = grid_search_linear_C(X_train, y_train, X_val, y_val, C_grid)
+    # --- RBF kernel grid only ---
+    from src.svm_qp import SVM_QP
 
-    #train final linear model with best C on TRAIN only (for visibility)
-    final_clf = SVM_QP(C=best_C, kernel=("linear", {}))
-    final_clf.fit(X_train, y_train)
+    # Small, sensible grid first (expand later only if it wins)
+    C_grid_rbf = [0.01, 0.1, 1.0]
+    gamma_grid = [0.001, 0.01, 0.1]
 
-    #report train/val/test (test is just for a quick look here... the final workflow will retrain on train+val)
-    print("\nFinal evaluation with best C (TRAIN-only fit):")
-    evaluate_model(final_clf, X_train, y_train, "Train")
-    evaluate_model(final_clf, X_val, y_val, "Val")
-    evaluate_model(final_clf, X_test, y_test, "Test")
+    best_rbf_params, rbf_results = grid_search_rbf(
+        X_train, y_train, X_val, y_val,
+        C_grid_rbf, gamma_grid
+    )
 
+    print("\n==> Training best RBF model for reference ...")
+    best_rbf = SVM_QP(C=best_rbf_params["C"], kernel=("rbf", {"gamma": best_rbf_params["gamma"]}))
+    best_rbf.fit(X_train, y_train)
+    print("RBF model performance:")
+    evaluate_model(best_rbf, X_train, y_train, "Train")
+    evaluate_model(best_rbf, X_val, y_val, "Val")
+    evaluate_model(best_rbf, X_test, y_test, "Test")
